@@ -23,19 +23,40 @@ add_compile_definitions(_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
 if(MEDIA_KIT_LIBS_AVAILABLE)
   include_directories(
     "${LIBMPV_SRC}/include"
-    "${ANGLE_SRC}/include"
   )
 
-  add_library(
-    ${PLUGIN_NAME} SHARED
-    "angle_surface_manager.cc"
-    "media_kit_video_plugin_c_api.cc"
-    "media_kit_video_plugin.cc"
-    "video_output_manager.cc"
-    "video_output.cc"
-    "utils.cc"
-    ${PLUGIN_SOURCES}
-  )
+  # ANGLE is only needed for x64, ARM64 uses native D3D11
+  if(${FLUTTER_TARGET_PLATFORM} STREQUAL "windows-x64")
+    include_directories("${ANGLE_SRC}/include")
+    
+    add_library(
+      ${PLUGIN_NAME} SHARED
+      "angle_surface_manager.cc"
+      "media_kit_video_plugin_c_api.cc"
+      "media_kit_video_plugin.cc"
+      "video_output_manager.cc"
+      "video_output.cc"
+      "utils.cc"
+      ${PLUGIN_SOURCES}
+    )
+
+    target_link_libraries(
+      ${PLUGIN_NAME} PRIVATE
+      "${ANGLE_SRC}/lib/libEGL.dll.lib"
+      "${ANGLE_SRC}/lib/libGLESv2.dll.lib"
+    )
+  else()
+    # ARM64: No ANGLE, use native D3D11
+    add_library(
+      ${PLUGIN_NAME} SHARED
+      "media_kit_video_plugin_c_api.cc"
+      "media_kit_video_plugin.cc"
+      "video_output_manager.cc"
+      "video_output.cc"
+      "utils.cc"
+      ${PLUGIN_SOURCES}
+    )
+  endif()
 
   apply_standard_settings(${PLUGIN_NAME})
 
@@ -57,11 +78,7 @@ if(MEDIA_KIT_LIBS_AVAILABLE)
     ${PLUGIN_NAME} PRIVATE
     flutter
     flutter_wrapper_plugin
-
-    # Link to libmpv & ANGLE.
     "${LIBMPV_SRC}/libmpv.dll.a"
-    "${ANGLE_SRC}/lib/libEGL.dll.lib"
-    "${ANGLE_SRC}/lib/libGLESv2.dll.lib"
   )
 else()
   message(NOTICE "media_kit: WARNING: package:media_kit_libs_*** not found.")
