@@ -27,17 +27,12 @@ VideoOutput::VideoOutput(int64_t handle,
       configuration_(configuration),
       registrar_(registrar),
       thread_pool_ref_(thread_pool_ref) {
-  // The constructor must be invoked through the thread pool, because
-  // |ANGLESurfaceManager| & libmpv render context creation can conflict with
-  // the existing |Render| or |Resize| calls from another |VideoOutput|
-  // instances (which will result in access violation).
   auto future = thread_pool_ref_->Post([&]() {
     mpv_set_option_string(handle_, "video-sync", "audio");
     mpv_set_option_string(handle_, "video-timing-offset", "0");
-    // First try to initialize video playback with hardware acceleration &
-    // |ANGLESurfaceManager|, use S/W API as fallback.
     auto is_hardware_acceleration_enabled = false;
-    // Attempt to use H/W rendering.
+#if MEDIA_KIT_USE_ANGLE
+    // Attempt to use H/W rendering with ANGLE (x64 only)
     if (configuration.enable_hardware_acceleration) {
       try {
         // OpenGL context needs to be set before |mpv_render_context_create|.
@@ -62,9 +57,6 @@ VideoOutput::VideoOutput(int64_t handle,
           mpv_render_context_set_update_callback(
               render_context_,
               [](void* context) {
-                // Notify Flutter that a new frame is available. The actual
-                // rendering will take place in the |Render| method, which will
-                // be called by Flutter on the render thread.
                 auto that = reinterpret_cast<VideoOutput*>(context);
                 that->NotifyRender();
               },
@@ -80,6 +72,10 @@ VideoOutput::VideoOutput(int64_t handle,
         // which indicates that H/W rendering is not supported.
       }
     }
+#else
+    // ARM64: Always use S/W rendering (no ANGLE)
+    std::cout << "media_kit: VideoOutput: ARM64 - using S/W rendering." << std::endl;
+#endif
     if (!is_hardware_acceleration_enabled) {
       std::cout << "media_kit: VideoOutput: Using S/W rendering." << std::endl;
       // Allocate a "large enough" buffer ahead of time.
@@ -94,9 +90,6 @@ VideoOutput::VideoOutput(int64_t handle,
         mpv_render_context_set_update_callback(
             render_context_,
             [](void* context) {
-              // Notify Flutter that a new frame is available. The actual
-              // rendering will take place in the |Render| method, which will be
-              // called by Flutter on the render thread.
               auto that = reinterpret_cast<VideoOutput*>(context);
               that->NotifyRender();
             },

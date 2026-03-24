@@ -22,7 +22,14 @@
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 
+// ANGLE is only available on x64, ARM64 uses native D3D11 with SW rendering
+#if !defined(_M_ARM64) && !defined(__aarch64__)
 #include "angle_surface_manager.h"
+#define MEDIA_KIT_USE_ANGLE 1
+#else
+#define MEDIA_KIT_USE_ANGLE 0
+#endif
+
 #include "thread_pool.h"
 
 typedef struct _VideoOutputConfiguration {
