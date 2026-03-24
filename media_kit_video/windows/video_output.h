@@ -49,10 +49,12 @@ class VideoOutput {
  public:
   int64_t texture_id() const { return texture_id_; }
   int64_t width() const {
+#if MEDIA_KIT_USE_ANGLE
     // H/W
     if (surface_manager_ != nullptr && texture_id_) {
       return surface_manager_->width();
     }
+#endif
     // S/W
     if (pixel_buffer_ != nullptr && texture_id_) {
       return pixel_buffer_textures_.at(texture_id_)->width;
@@ -60,10 +62,12 @@ class VideoOutput {
     return width_.value_or(1);
   }
   int64_t height() const {
+#if MEDIA_KIT_USE_ANGLE
     // H/W
     if (surface_manager_ != nullptr && texture_id_) {
       return surface_manager_->height();
     }
+#endif
     // S/W
     if (pixel_buffer_ != nullptr && texture_id_) {
       return pixel_buffer_textures_.at(texture_id_)->height;
@@ -115,15 +119,15 @@ class VideoOutput {
   std::unordered_map<int64_t, std::unique_ptr<flutter::TextureVariant>>
       texture_variants_ = {};
 
-  // H/W rendering.
-
+  // H/W rendering (x64 only with ANGLE).
+#if MEDIA_KIT_USE_ANGLE
   std::unique_ptr<ANGLESurfaceManager> surface_manager_ = nullptr;
   std::unordered_map<int64_t,
                      std::unique_ptr<FlutterDesktopGpuSurfaceDescriptor>>
       textures_ = {};
+#endif
 
   // S/W rendering.
-
   std::unique_ptr<uint8_t[]> pixel_buffer_ = nullptr;
   std::unordered_map<int64_t, std::unique_ptr<FlutterDesktopPixelBuffer>>
       pixel_buffer_textures_ = {};
