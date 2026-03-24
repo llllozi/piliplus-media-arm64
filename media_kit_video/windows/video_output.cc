@@ -9,6 +9,7 @@
 #include "video_output.h"
 
 #include <algorithm>
+#include <iostream>
 
 // Limit the frame size to 1080p in software rendering.
 // This is for performance reasons & to avoid allocating too much memory.
@@ -106,11 +107,6 @@ VideoOutput::~VideoOutput() {
   if (texture_id_) {
     registrar_->texture_registrar()->UnregisterTexture(
         texture_id_, [&, texture_id = texture_id_]() {
-          // Add one more task into the thread pool queue & exit the destructor
-          // only when it gets executed. This will ensure that all the tasks
-          // posted to the thread pool i.e. render or resize before this are
-          // executed (and won't reference the dead object anymore), most
-          // notably |CheckAndResize| & |Render|.
           auto future = thread_pool_ref_->Post([&, id = texture_id]() {
             std::cout << "media_kit: VideoOutput: Free Texture: " << id
                       << std::endl;
@@ -118,15 +114,13 @@ VideoOutput::~VideoOutput() {
                       << reinterpret_cast<int64_t>(handle_) << std::endl;
             std::lock_guard<std::mutex> lock(textures_mutex_);
             texture_variants_.clear();
-            // H/W
+#if MEDIA_KIT_USE_ANGLE
             textures_.clear();
-            // S/W
+#endif
             pixel_buffer_textures_.clear();
-            // Free (call destructor) |ANGLESurfaceManager| through the thread
-            // pool. This will ensure synchronized EGL or ANGLE usage & won't
-            // conflict with |Render| or |CheckAndResize| of other
-            // |VideoOutput|s.
+#if MEDIA_KIT_USE_ANGLE
             surface_manager_.reset(nullptr);
+#endif
             promise.set_value();
           });
         });
@@ -150,6 +144,7 @@ void VideoOutput::NotifyRender() {
 
 void VideoOutput::Render() {
   if (texture_id_) {
+#if MEDIA_KIT_USE_ANGLE
     // H/W
     if (surface_manager_ != nullptr) {
       surface_manager_->Draw([&]() {
@@ -166,6 +161,7 @@ void VideoOutput::Render() {
         mpv_render_context_render(render_context_, params);
       });
     }
+#endif
     // S/W
     if (pixel_buffer_ != nullptr) {
       int32_t size[]{
@@ -201,10 +197,12 @@ void VideoOutput::SetSize(std::optional<int64_t> width,
                           std::optional<int64_t> height) {
   thread_pool_ref_->Post([&, width, height]() {
     if (width.has_value()) {
+#if MEDIA_KIT_USE_ANGLE
       // H/W
       if (surface_manager_ != nullptr) {
         width_ = width.value();
       }
+#endif
       // S/W
       if (pixel_buffer_ != nullptr) {
         // Limit width if software rendering is being used.
@@ -215,10 +213,12 @@ void VideoOutput::SetSize(std::optional<int64_t> width,
       width_ = std::nullopt;
     }
     if (height.has_value()) {
+#if MEDIA_KIT_USE_ANGLE
       // H/W
       if (surface_manager_ != nullptr) {
         height_ = height.value();
       }
+#endif
       // S/W
       if (pixel_buffer_ != nullptr) {
         // Limit width if software rendering is being used.
@@ -239,10 +239,12 @@ void VideoOutput::CheckAndResize() {
     return;
   }
   int64_t current_width = -1, current_height = -1;
+#if MEDIA_KIT_USE_ANGLE
   if (surface_manager_ != nullptr) {
     current_width = surface_manager_->width();
     current_height = surface_manager_->height();
   }
+#endif
   if (pixel_buffer_ != nullptr) {
     current_width = pixel_buffer_textures_.at(texture_id_)->width;
     current_height = pixel_buffer_textures_.at(texture_id_)->height;
@@ -274,10 +276,12 @@ void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
             if (texture_variants_.find(id) != texture_variants_.end()) {
               texture_variants_.erase(id);
             }
+#if MEDIA_KIT_USE_ANGLE
             // H/W
             if (textures_.find(id) != textures_.end()) {
               textures_.erase(id);
             }
+#endif
             // S/W
             if (pixel_buffer_textures_.find(id) !=
                 pixel_buffer_textures_.end()) {
@@ -287,6 +291,7 @@ void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
         });
     texture_id_ = 0;
   }
+#if MEDIA_KIT_USE_ANGLE
   // H/W
   if (surface_manager_ != nullptr) {
     // Destroy internal ID3D11Texture2D & EGLSurface & create new with updated
@@ -324,6 +329,7 @@ void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
     // Notify public texture update callback.
     texture_update_callback_(texture_id_, required_width, required_height);
   }
+#endif
   // S/W
   if (pixel_buffer_ != nullptr) {
     auto pixel_buffer_texture = std::make_unique<FlutterDesktopPixelBuffer>();
@@ -397,11 +403,7 @@ int64_t VideoOutput::GetVideoWidth() {
     if (width >= SW_RENDERING_MAX_WIDTH) {
       return SW_RENDERING_MAX_WIDTH;
     }
-    if (height >= SW_RENDERING_MAX_HEIGHT) {
-      return width / height * SW_RENDERING_MAX_HEIGHT;
-    }
   }
-
   return width;
 }
 
@@ -440,16 +442,12 @@ int64_t VideoOutput::GetVideoHeight() {
   width = rotate == 0 || rotate == 180 ? dw : dh;
   height = rotate == 0 || rotate == 180 ? dh : dw;
 
-  if (pixel_buffer_ != NULL) {
+  if (pixel_buffer_ != nullptr) {
     // Make sure |width| & |height| fit between |SW_RENDERING_MAX_WIDTH| &
     // |SW_RENDERING_MAX_HEIGHT| while maintaining aspect-ratio.
     if (height >= SW_RENDERING_MAX_HEIGHT) {
       return SW_RENDERING_MAX_HEIGHT;
     }
-    if (width >= SW_RENDERING_MAX_WIDTH) {
-      return height / width * SW_RENDERING_MAX_WIDTH;
-    }
   }
-
   return height;
 }
