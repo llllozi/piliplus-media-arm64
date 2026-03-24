@@ -15,7 +15,6 @@ set(PLUGIN_NAME "media_kit_video_plugin")
 # This is shipped as part of package:media_kit_libs_*** package(s).
 # Must be built before this target.
 set(LIBMPV_SRC "${CMAKE_BINARY_DIR}/libmpv")
-set(ANGLE_SRC "${CMAKE_BINARY_DIR}/ANGLE")
 
 # Deal with MSVC incompatiblity
 add_compile_definitions(_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
@@ -25,38 +24,16 @@ if(MEDIA_KIT_LIBS_AVAILABLE)
     "${LIBMPV_SRC}/include"
   )
 
-  # ANGLE is only needed for x64, ARM64 uses native D3D11
-  if(${FLUTTER_TARGET_PLATFORM} STREQUAL "windows-x64")
-    include_directories("${ANGLE_SRC}/include")
-    
-    add_library(
-      ${PLUGIN_NAME} SHARED
-      "angle_surface_manager.cc"
-      "media_kit_video_plugin_c_api.cc"
-      "media_kit_video_plugin.cc"
-      "video_output_manager.cc"
-      "video_output.cc"
-      "utils.cc"
-      ${PLUGIN_SOURCES}
-    )
-
-    target_link_libraries(
-      ${PLUGIN_NAME} PRIVATE
-      "${ANGLE_SRC}/lib/libEGL.dll.lib"
-      "${ANGLE_SRC}/lib/libGLESv2.dll.lib"
-    )
-  else()
-    # ARM64: No ANGLE, use native D3D11
-    add_library(
-      ${PLUGIN_NAME} SHARED
-      "media_kit_video_plugin_c_api.cc"
-      "media_kit_video_plugin.cc"
-      "video_output_manager.cc"
-      "video_output.cc"
-      "utils.cc"
-      ${PLUGIN_SOURCES}
-    )
-  endif()
+  add_library(
+    ${PLUGIN_NAME} SHARED
+    "d3d11_renderer.cc"
+    "media_kit_video_plugin_c_api.cc"
+    "media_kit_video_plugin.cc"
+    "video_output_manager.cc"
+    "video_output.cc"
+    "utils.cc"
+    ${PLUGIN_SOURCES}
+  )
 
   apply_standard_settings(${PLUGIN_NAME})
 
@@ -78,6 +55,8 @@ if(MEDIA_KIT_LIBS_AVAILABLE)
     ${PLUGIN_NAME} PRIVATE
     flutter
     flutter_wrapper_plugin
+
+    # Link to libmpv.
     "${LIBMPV_SRC}/libmpv.dll.a"
   )
 else()
@@ -100,7 +79,7 @@ else()
     ${PLUGIN_NAME} PRIVATE
     FLUTTER_PLUGIN_IMPL
 
-    # Add macro to indicate that libmpv & ANGLE from package:media_kit_libs_*** are not found.
+    # Add macro to indicate that libmpv from package:media_kit_libs_*** are not found.
     "MEDIA_KIT_LIBS_NOT_FOUND=1"
   )
 
