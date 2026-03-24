@@ -66,19 +66,20 @@ endfunction()
 
 # Detect architecture and set appropriate libmpv archive
 # FLUTTER_TARGET_PLATFORM is set by Flutter build system (windows-x64 or windows-arm64)
+# Using Predidit's libmpv which includes render_dxgi.h for native D3D11 rendering
 if(${FLUTTER_TARGET_PLATFORM} STREQUAL "windows-x64")
   set(LIBMPV_ARCH "x86_64")
-  set(LIBMPV "mpv-dev-x86_64-20250930-git-05656cd.7z")
-  set(LIBMPV_SHA256 "2a44d51385da539da803f1b5f5053fd8")
+  set(LIBMPV "mpv-dev-x86_64-20251210-git-ad59ff1.7z")
+  set(LIBMPV_SHA256 "53212bb8886d76d041ecd023a29e6213ada6fb5afedb8970610b396435833b99")
 else()
   # windows-arm64
   set(LIBMPV_ARCH "aarch64")
-  set(LIBMPV "mpv-dev-aarch64-20251004-git-17a3ac4.7z")
-  set(LIBMPV_SHA256 "d3c2d7750ae19780f85eaa605d4e4b9bbd9f8336f020fc12d050958006f19333")
+  set(LIBMPV "mpv-dev-aarch64-20251210-git-ad59ff1.7z")
+  set(LIBMPV_SHA256 "8e3746e9d88351dd19be0e0da0c8745a089a3d07d5dd8a84c10de7f47ba88bcd")
 endif()
 
-# Download URL for the libmpv archive
-set(LIBMPV_URL "https://github.com/bggRGjQaUbCoE/mpv-winbuild-cmake/releases/download/20251004/${LIBMPV}")
+# Download URL for the libmpv archive from Predidit's release
+set(LIBMPV_URL "https://github.com/Predidit/libmpv-win32-video-cmake/releases/download/20251210/${LIBMPV}")
 
 # Download location of the libmpv archive.
 set(LIBMPV_ARCHIVE "${CMAKE_BINARY_DIR}/${LIBMPV}")
@@ -118,41 +119,6 @@ if(NOT LIBMPV_SRC_VALID)
 endif()
 
 # ------------------------------------------------------------------------------
-
-# ANGLE archive - only for x64 (ARM64 uses native D3D11)
-if(${FLUTTER_TARGET_PLATFORM} STREQUAL "windows-x64")
-  set(ANGLE "ANGLE.7z")
-  set(ANGLE_URL "https://github.com/alexmercerind/flutter-windows-ANGLE-OpenGL-ES/releases/download/v1.0.1/ANGLE.7z")
-  set(ANGLE_SHA256 "e866f13e8d552348058afaafe869b1ed")
-
-  set(ANGLE_ARCHIVE "${CMAKE_BINARY_DIR}/${ANGLE}")
-  set(ANGLE_SRC "${CMAKE_BINARY_DIR}/ANGLE")
-
-  download_and_verify(
-    ${ANGLE_URL}
-    ${ANGLE_SHA256}
-    ${ANGLE_ARCHIVE}
-  )
-
-  check_directory_exists_and_not_empty(${ANGLE_SRC} ANGLE_SRC_VALID)
-
-  if(NOT ANGLE_SRC_VALID)
-    message(STATUS "Extracting ${ANGLE}...")
-    make_directory("${ANGLE_SRC}")
-    add_custom_target("${PROJECT_NAME}_ANGLE_EXTRACT" ALL)
-
-    if(SEVENZ_EXECUTABLE)
-      add_custom_command(
-        TARGET "${PROJECT_NAME}_ANGLE_EXTRACT"
-        POST_BUILD
-        COMMAND "${SEVENZ_EXECUTABLE}" x -y "\"${ANGLE_ARCHIVE}\""
-        WORKING_DIRECTORY "${ANGLE_SRC}"
-      )
-    endif()
-  endif()
-endif()
-
-# ------------------------------------------------------------------------------
 set(PLUGIN_NAME "media_kit_libs_windows_video_plugin")
 
 add_library(
@@ -186,23 +152,9 @@ target_link_libraries(
   flutter_wrapper_plugin
 )
 
-if(${FLUTTER_TARGET_PLATFORM} STREQUAL "windows-x64")
-  set(
-    media_kit_libs_windows_video_bundled_libraries
-    "${LIBMPV_SRC}/libmpv-2.dll"
-    "${ANGLE_SRC}/d3dcompiler_47.dll"
-    "${ANGLE_SRC}/libEGL.dll"
-    "${ANGLE_SRC}/libGLESv2.dll"
-    "${ANGLE_SRC}/vk_swiftshader.dll"
-    "${ANGLE_SRC}/vulkan-1.dll"
-    "${ANGLE_SRC}/zlib.dll"
-    PARENT_SCOPE
-  )
-else()
-  # ARM64 - no ANGLE needed, native D3D11
-  set(
-    media_kit_libs_windows_video_bundled_libraries
-    "${LIBMPV_SRC}/libmpv-2.dll"
-    PARENT_SCOPE
-  )
-endif()
+# No ANGLE needed - using native D3D11 rendering
+set(
+  media_kit_libs_windows_video_bundled_libraries
+  "${LIBMPV_SRC}/libmpv-2.dll"
+  PARENT_SCOPE
+)
